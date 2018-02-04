@@ -2,15 +2,16 @@ module Main where
 
 import Voronoi
 import qualified Data.Sequence as S
+import qualified Data.List as L
 import Control.Monad.State
 
 main :: IO ()
 main = do
     let points =
-            [ Point2D (0, 0)
-            , Point2D (10, 5)
-            , Point2D (20, 10)
-            , Point2D (30, 15)
-            , Point2D (40, 20)
+            [ (0, 0)
+            , (1, 0)
+            , (0, 1)
+            , (1, 1)
             ] :: [Point2D Integer]
+    putStrLn . show . L.sortOn compareByY $ points
     putStrLn . show . voronoi2D $ points
