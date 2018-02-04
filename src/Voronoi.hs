@@ -10,6 +10,15 @@ import qualified Data.Set as H -- H for "heap"
 
 import Debug.Trace
 
+uniq :: (Eq a) => [a] -> [a]
+uniq [] = []
+uniq list = foldr go [] list
+  where
+    go e [] = [e]
+    go e t@(x: _)
+      | e /= x = e : t
+      | otherwise = t
+
 type Point2D a = (a, a)
 
 compareByY :: Ord a => Point2D a -> Point2D a
@@ -29,22 +38,24 @@ circumcentre (x1, y1) (x2, y2) (x3, y3)
     cy2 = 2 * (y3 - y2)
     c1 = x3 * x3 - x1 * x1 + y3 * y3 - y1 * y1
     c2 = x3 * x3 - x2 * x2 + y3 * y3 - y2 * y2
+  
+  
+  
+  
 
-    
-data Cell a = 
-  Cell (Point2D a) |
-  LeftExtent |
-  RightExtent
+data HalfEdge a = 
+  HalfEdge (Point2D a) (Point2D a) |
+  LeftExtent (Point2D a) |
+  RightExtent (Point2D a)
   deriving (Show)
-  
-  
-  
-
-data HalfEdge a = HalfEdge 
-    { lCell :: Cell a 
-    , rCell :: Cell a 
-    } deriving (Show)
     
+lSite :: HalfEdge a -> Point2D a
+lSite (RightExtent l) = l
+lSite (HalfEdge l _) = l    
+
+rSite :: HalfEdge a -> Point2D a
+rSite (LeftExtent r) = r
+rSite (HalfEdge r _) = r    
     
     
 data EdgeEvent a = EdgeEvent 
@@ -86,16 +97,16 @@ vEmit = (++)
 voronoi2D :: (Show i, Integral i) => [Point2D i] -> Vstate i
 voronoi2D p =
   let
-    p' = L.sortOn compareByY $ p
+    p' = uniq . L.sortOn compareByY $ p
     (_, startY) = head p'
     (lowPoints, p'') = span (\(_, y) -> y == startY) p'
     
-    lowCells = map Cell lowPoints
+    halfedges = zipWith HalfEdge lowPoints (tail lowPoints)
+    left = LeftExtent (head lowPoints)
+    right = RightExtent (last lowPoints)
     
-    rsites = lowCells ++ [RightExtent]
-    lsites = LeftExtent : lowCells
+    l = S.fromList $ left : halfedges ++ [right]
     
-    l = S.fromList $ zipWith HalfEdge lsites rsites
     h = H.empty
     e = eEmit (zipWith Connection lowPoints (tail lowPoints)) $ []
     v = []
@@ -128,16 +139,16 @@ insertSite (Vs p l h e v) =
     
     index = findInSequenceGt compareCellToHE site l
     
-    rrEdge@(HalfEdge (Cell rl) _) = S.index l index
-    llEdge@(HalfEdge _ (Cell lr)) = S.index l (index - 1)
+    rrEdge = S.index l index
+    llEdge = S.index l (index - 1)
     
-    rEdge = HalfEdge (Cell site) (Cell rl)
-    lEdge = HalfEdge (Cell lr) (Cell site)
+    rEdge = HalfEdge site (lSite rrEdge)
+    lEdge = HalfEdge (rSite llEdge) site
     
     l' = S.insertAt index lEdge . S.insertAt index rEdge $ l
 
     h' = checkCollision rEdge rrEdge . checkCollision llEdge lEdge $ h
-    e' = eEmit [Connection lr site] $ e
+    e' = eEmit [Connection (lSite rrEdge) site] $ e
   in
     (Vs p' l' h' e' v)
             
@@ -159,9 +170,9 @@ insertCollision (Vs p l h e v) =
         compareIntersectionHE site rEdge == EQ
     then
       let
-        HalfEdge (Cell rl) (Cell rr) = rEdge
-        HalfEdge (Cell ll) (Cell lr) = lEdge
-        he = HalfEdge (Cell ll) (Cell rr)
+        HalfEdge rl rr = rEdge
+        HalfEdge ll lr = lEdge
+        he = HalfEdge ll rr
         
         l' = S.update index he . S.deleteAt index $ l
         
@@ -180,11 +191,11 @@ insertCollision (Vs p l h e v) =
 
 checkCollision :: (Show i, Integral i) => HalfEdge i -> HalfEdge i -> 
                   EventHeap i -> EventHeap i
-checkCollision (HalfEdge LeftExtent _) _ st = st
-checkCollision _ (HalfEdge _ RightExtent) st = st
+checkCollision (LeftExtent _) _ st = st
+checkCollision _ (RightExtent _) st = st
 checkCollision 
-  (HalfEdge (Cell ll@(xll, yll)) (Cell lr@(xlr, ylr))) 
-  (HalfEdge (Cell rl@(xrl, yrl)) (Cell rr@(xrr, yrr))) 
+  (HalfEdge ll@(xll, yll) lr@(xlr, ylr)) 
+  (HalfEdge rl@(xrl, yrl) rr@(xrr, yrr)) 
   (h) =
   let 
     cCentre = trace ("cCentre: " ++ show (circumcentre ll lr rr)) (circumcentre ll lr rr)
@@ -209,9 +220,9 @@ checkCollision
     
     
 compareCellToHE :: Integral a => Point2D a -> HalfEdge a -> Ordering
-compareCellToHE _ (HalfEdge LeftExtent _) = GT
-compareCellToHE _ (HalfEdge _ RightExtent) = LT
-compareCellToHE c@(xc, yc) (HalfEdge (Cell l@(xl, yl)) (Cell r@(xr, yr)))
+compareCellToHE _ (LeftExtent _) = GT
+compareCellToHE _ (RightExtent _) = LT
+compareCellToHE c@(xc, yc) (HalfEdge l@(xl, yl) r@(xr, yr))
   | yl >= yr && xc < xl = LT -- is a right halfedge, and the cell is to the left
   | yl <= yr && xc > xr = GT -- is a left halfedge, and the cell it to the right
   | otherwise = 
@@ -227,9 +238,9 @@ compareCellToHE c@(xc, yc) (HalfEdge (Cell l@(xl, yl)) (Cell r@(xr, yr)))
 
     
 compareIntersectionHE :: Integral a => Point2D a -> HalfEdge a -> Ordering 
-compareIntersectionHE _ (HalfEdge LeftExtent _) = GT
-compareIntersectionHE _ (HalfEdge _ RightExtent) = LT
-compareIntersectionHE c@(xc, yc) (HalfEdge (Cell l@(xl, yl)) (Cell r@(xr, yr)))
+compareIntersectionHE _ (LeftExtent _) = GT
+compareIntersectionHE _ (RightExtent _ ) = LT
+compareIntersectionHE (xc, yc) (HalfEdge (xl, yl) (xr, yr))
   | yl >= yr && xc < xl = LT -- is a right halfedge and the cell is to the left
   | yl <= yr && xc >= xr = GT -- is a left halfedge and the point is to the right
   | dx >= dy = -- more vertical than horizontal
