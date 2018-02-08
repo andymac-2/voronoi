@@ -9,7 +9,7 @@ main :: IO ()
 main = do
   let 
     rng = mkStdGen 1242332 
-    points = take 40 . makePointList $ rng
+    points = take 300 . makePointList $ rng
     -- points :: [Point2D (Ratio Integer)]
     -- points = [(0, 0), (300, 0),
       -- (10, 400), (300, 378), (320, 158),

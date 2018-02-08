@@ -8,8 +8,6 @@ import qualified Data.Sequence as S
 import qualified Data.HashMap.Lazy as M
 import qualified Data.Set as H -- H for "heap"
 
-import Debug.Trace
-
 epsilon :: Integral a => Ratio a
 epsilon = 1%100
 
@@ -182,13 +180,12 @@ voronoi2D p =
 
 getNext :: (Show i, Hashable i, Integral i) => Vstate i -> Vstate i
 getNext st@(Vs p l h e v)
-  | nh && np = stt
-  | np = getNext . insertCollision $ stt
-  | nh = getNext . insertSite $ stt
-  | y < height = getNext . insertSite $ stt
-  | otherwise = getNext . insertCollision $ stt
+  | nh && np = st
+  | np = getNext . insertCollision $ st
+  | nh = getNext . insertSite $ st
+  | y < height = getNext . insertSite $ st
+  | otherwise = getNext . insertCollision $ st
   where
-    stt = trace (show st) st
     np = null p
     nh = null h
     (_, y) = head p
@@ -210,8 +207,7 @@ insertSite (Vs p l h e v) =
     rEdge = HalfEdge site (lSite rrEdge)
     lEdge = HalfEdge (rSite llEdge) site
     
-    l' = S.insertAt index lEdge . S.insertAt index rEdge $ 
-      (trace ("\nInsert Site: " ++ (show site) ++ " above " ++ (show (rSite llEdge))) l)
+    l' = S.insertAt index lEdge . S.insertAt index rEdge $ l
     
     h' = checkCollision rEdge rrEdge . checkCollision llEdge lEdge $ h
     e' = eEmit ((lSite rrEdge, site), []) $ e
@@ -232,13 +228,10 @@ insertCollision (Vs p l h e v) =
     -- if collision is still present in edge list, replace two
     -- halfedges with the new one, and check for collisions in neighboring
     -- halfedges.
-  in if compareIntersectionHE ev lEdge == trace 
-    ("\nInsert possible collision: " ++ show site ++ " between: " ++ 
-      show lEdge ++ "comparing " ++ 
-      show(compareIntersectionHE ev lEdge)) EQ
+  in if compareIntersectionHE ev lEdge == EQ
     then
       let
-        HalfEdge rl rr = trace ("rEdge" ++ show rEdge) rEdge
+        HalfEdge rl rr = rEdge
         HalfEdge ll lr = lEdge
         he = HalfEdge ll rr
         
@@ -249,14 +242,13 @@ insertCollision (Vs p l h e v) =
         
         h'' = checkCollision lll he . checkCollision he rrr $ h'
         
-        e' = eEmit ((ll, rr), []) 
-          (trace ("collision inserted " ++ show ll ++ show lr ++ show rr) (e))
+        e' = eEmit ((ll, rr), []) e
         
         state = vEmit (site, [ll, lr, rr]) (Vs p l' h'' e' v)
       in
         state
     else 
-      trace "no collision" (Vs p l h' e v)
+      (Vs p l h' e v)
         
 
 checkCollision :: (Show a, Integral a) => HalfEdge (Ratio a) -> HalfEdge (Ratio a) -> 
@@ -267,23 +259,21 @@ checkCollision
   l@(HalfEdge ll@(xll, yll) lr@(xlr, ylr)) 
   r@(HalfEdge rl@(xrl, yrl) rr@(xrr, yrr)) (h) =
   let
-    cCentre = trace 
-      ("Check collision between" ++ (show ll) ++ (show lr) ++ (show rr))
-      (circumcentre ll lr rr)
+    cCentre = circumcentre ll lr rr
     
   in case cCentre of
-    Nothing -> trace "Check collision, collinear." h
+    Nothing -> h
     
     (Just cc@(xcc, ycc))
-      | yll >= ylr && xcc < xll   -> trace "1" h -- is a right halfedge
-      | yll <= ylr && xcc >= xlr  -> trace "2" h -- is a left halfedge
-      | yrl >= yrr && xcc < xrl   -> trace "3" h -- is a right halfedge
-      | yrl <= yrr && xcc >= xrr  -> trace "4" h -- is a left halfedge
-      | yll == ylr -> (H.insert (EdgeEvent cc vertHeight) (trace "7" h))
-      | otherwise -> (H.insert (EdgeEvent cc height) (trace "5" h))
+      | yll >= ylr && xcc < xll   -> h -- is a right halfedge
+      | yll <= ylr && xcc >= xlr  -> h -- is a left halfedge
+      | yrl >= yrr && xcc < xrl   -> h -- is a right halfedge
+      | yrl <= yrr && xcc >= xrr  -> h -- is a left halfedge
+      | yll == ylr -> H.insert (EdgeEvent cc vertHeight) h
+      | otherwise -> H.insert (EdgeEvent cc height) h
       
       where
-        height = trace "here1" (getY xcc l)
+        height = getY xcc l
         
         distSq = (xcc - xlr) * (xcc - xlr) + (ycc - ylr) * (ycc - ylr)
         distfloat = sqrt . fromRational . toRational $ distSq :: Double
