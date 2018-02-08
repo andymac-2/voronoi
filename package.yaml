@@ -26,7 +26,8 @@ library:
   source-dirs: src
   dependencies:
   - containers
-  - mtl
+  - unordered-containers
+  - hashable
 
 executables:
   voronoi-exe:
@@ -39,7 +40,7 @@ executables:
     dependencies:
     - voronoi
     - containers
-    - mtl
+    - random
 
 tests:
   voronoi-test:
