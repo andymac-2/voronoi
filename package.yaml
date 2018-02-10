@@ -35,8 +35,7 @@ executables:
     source-dirs:         app
     ghc-options:
     - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
+    - -O2
     dependencies:
     - voronoi
     - containers
@@ -48,7 +47,5 @@ tests:
     source-dirs:         test
     ghc-options:
     - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
     dependencies:
     - voronoi
